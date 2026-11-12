@@ -15,6 +15,7 @@ Analyse du dataset Kaggle [`wyattowalsh/basketball`](https://www.kaggle.com/data
 ```
 data/archive/csv/  ->  Spark (master + worker)  ->  HDFS  /nba/pbp (parquet)
                                               ->  MongoDB nba (14 collections d'agregats)
+                                                  ->  dashboard Streamlit :8501
                                               ->  resultats/*.png (figures)
 ```
 
@@ -35,6 +36,7 @@ docker compose up -d          # monte spark master/worker/history, jupyter, mong
 # dataset : placer l'extraction Kaggle dans data/archive/ (non versionne, ~4,5 Go)
 # jupyter : http://localhost:8888 -> notebooks/analyse_nba.ipynb
 # spark UI : http://localhost:8080 | HDFS : http://localhost:9870 | history : http://localhost:18080
+# dashboard : http://localhost:8501 (Streamlit, lit les collections Mongo)
 ```
 
 ## Résultats clés
@@ -48,6 +50,7 @@ docker compose up -d          # monte spark master/worker/history, jupyter, mong
 
 - `notebooks/analyse_nba.ipynb` — pipeline + analyses exécutées (le cœur du projet)
 - `notebooks/gen_nb.py` — générateur du notebook
+- `dashboard/app.py` — dashboard Streamlit (couche serving Mongo → Plotly)
 - `docker-compose.yml`, `hadoop.env`, `docker/`, `conf/` — environnement
 - `resultats/` — les 10 figures pour le rapport
 - `data/` — dataset Kaggle (ignoré par git)

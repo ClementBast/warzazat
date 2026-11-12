@@ -50,6 +50,17 @@ services:
       - ./events:/work/events
       - ./conf:/opt/spark/conf
 
+  dashboard:
+    image: projet-nba/spark:3.5.7
+    build: ./docker
+    command: streamlit run /work/dashboard/app.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true
+    ports:
+      - "8501:8501"
+    depends_on:
+      - mongo
+    volumes:
+      - ./dashboard:/work/dashboard
+
   mongo:
     image: mongo:7.0
     ports:
