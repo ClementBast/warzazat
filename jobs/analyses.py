@@ -1,7 +1,3 @@
-"""Analyses : parquet HDFS -> agregats -> MongoDB + PNGs dans /work/resultats.
-
-    python3 /work/jobs/analyses.py   (dans le conteneur jupyter)
-"""
 import json
 import matplotlib
 matplotlib.use("Agg")
@@ -19,7 +15,6 @@ RESULTATS = {}
 n_matchs = rs.select("game_id").distinct().count()
 print("matchs RS:", n_matchs)
 
-# --- 2. Deroule d'un match ---------------------------------------------------
 par_min = (rs.filter(F.col("sec") < 2880).withColumn("minute", F.floor(F.col("sec") / 60))
     .groupBy("minute")
     .agg(F.count(F.when(F.col("eventmsgtype") == 6, 1)).alias("fautes"),
@@ -48,7 +43,6 @@ RESULTATS["par_quart_temps"] = par_qt
 par_qt.plot(x="period", kind="bar", figsize=(10, 4), title="Rythme par quart-temps (par minute de jeu)")
 plt.savefig(f"{RES}/02_quart_temps.png"); plt.close()
 
-# --- 3. Choix de tir ---------------------------------------------------------
 saisons = (game.filter(F.col("season_type") == "Regular Season")
     .withColumn("annee", F.col("season_id").cast("int") - 20000)
     .withColumn("t3", F.col("fg3a_home").cast("double") + F.col("fg3a_away").cast("double"))
@@ -93,7 +87,6 @@ par_equipe.plot(x="player1_team_abbreviation", y="part_assistee", kind="bar",
                 ax=ax[1], title="Assist % par equipe (depuis 2014-15)", legend=False)
 plt.tight_layout(); plt.savefig(f"{RES}/03_assists.png"); plt.close()
 
-# --- 4. Strategies de fin de match -------------------------------------------
 rs4 = rs.filter(F.col("period") == 4)
 n4 = rs4.select("game_id").distinct().count()
 fin = rs4.filter(F.col("rest") <= 120).withColumn(
@@ -170,7 +163,6 @@ ax[1].bar(eff.run_adv.map({True: "pendant un run adv.", False: "hors run"}), eff
 ax[1].set_title("% de temps morts qui cassent la serie (0 pt adverse sur 60s)")
 plt.tight_layout(); plt.savefig(f"{RES}/04_timeouts.png"); plt.close()
 
-# --- 5. Runs & remontees ------------------------------------------------------
 sc_all = rs.filter(F.col("pts") > 0).select("game_id", "eventnum", "sec", "period", "side", "pts")
 w3 = Window.partitionBy("game_id").orderBy("eventnum")
 sc_all = (sc_all.withColumn("new", F.when(F.col("side") != F.lag("side").over(w3), 1).otherwise(0))
@@ -220,7 +212,6 @@ plt.title("Victoire selon le plus gros deficit subi dans le match"); plt.ylabel(
 for i, r in taux.iterrows(): plt.text(i, r.win_pct * 100 + 1, f"n={r.n}", ha="center", fontsize=8)
 plt.savefig(f"{RES}/05_remontees.png"); plt.close()
 
-# --- 6. Persistance Mongo ------------------------------------------------------
 mongo = pymongo.MongoClient("mongodb://mongo:27017")["nba"]
 for nom, df in RESULTATS.items():
     col = mongo[nom]

@@ -1,12 +1,3 @@
-"""Ingestion : telecharge le dataset Kaggle -> data/archive/ (+ option --hdfs).
-
-Usage (dans le conteneur jupyter) :
-    python3 /work/jobs/ingest_kaggle.py            # download + extract
-    python3 /work/jobs/ingest_kaggle.py --hdfs     # + pousse les CSV vers hdfs:///nba/raw
-
-kagglehub telecharge les datasets publics sans credentials
-(kaggle.json utilise automatiquement si present dans ./.kaggle).
-"""
 import argparse
 import os
 import shutil
@@ -34,7 +25,6 @@ def download(dest):
 
 
 def put_webhdfs(local_path, hdfs_path):
-    """Upload d'un fichier vers HDFS via WebHDFS (CREATE + redirect datanode)."""
     mkdir = requests.put(
         f"{NAMENODE}/webhdfs/v1{os.path.dirname(hdfs_path)}"
         f"?op=MKDIRS&user.name=root", timeout=30)

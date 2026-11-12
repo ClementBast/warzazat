@@ -25,7 +25,7 @@ data/archive/csv/  ->  Spark (master + worker)  ->  HDFS  /nba/pbp (parquet)
 | Traitement | PySpark — DataFrames, fenêtres, jointures |
 | Persistance traitée | HDFS (parquet) |
 | Persistance serving | MongoDB |
-| Viz | matplotlib / seaborn, JupyterLab |
+| Viz | Streamlit + Plotly ; matplotlib pour les figures du rapport |
 
 Pas de Kafka : la donnée est historique (batch), pas un flux temps réel — Kafka est cité comme piste d'amélioration (rejouer un match en stream).
 
@@ -39,7 +39,6 @@ docker exec projetgroupe-jupyter-1 python3 /work/jobs/ingest_kaggle.py   # Kaggl
 docker exec projetgroupe-jupyter-1 python3 /work/jobs/prepare.py         # CSV -> parquet HDFS /nba/pbp
 docker exec projetgroupe-jupyter-1 python3 /work/jobs/analyses.py        # parquet -> Mongo + resultats/*.png
 
-# jupyter : http://localhost:8888 -> notebooks/analyse_nba.ipynb (meme pipeline, interactif)
 # spark UI : http://localhost:8080 | HDFS : http://localhost:9870 | history : http://localhost:18080
 # dashboard : http://localhost:8501 (Streamlit, lit les collections Mongo)
 ```
@@ -57,8 +56,6 @@ docker exec projetgroupe-jupyter-1 python3 /work/jobs/analyses.py        # parqu
   - `ingest_kaggle.py` — télécharge le dataset Kaggle → `data/archive/` (`--hdfs` : pousse aussi vers `hdfs:///nba/raw`)
   - `prepare.py` — CSV → play-by-play enrichi → parquet `hdfs:///nba/pbp`
   - `analyses.py` — agrégats → MongoDB (14 collections) + `resultats/*.png`
-- `notebooks/analyse_nba.ipynb` — même pipeline en interactif (doc + démo)
-- `notebooks/gen_nb.py` — générateur du notebook
 - `dashboard/app.py` — dashboard Streamlit (couche serving Mongo → Plotly)
 - `docker-compose.yml`, `hadoop.env`, `docker/`, `conf/` — environnement
 - `resultats/` — les 10 figures pour le rapport

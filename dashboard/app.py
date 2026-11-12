@@ -14,7 +14,7 @@ def col(nom):
 
 def graphe(df, fig_fn):
     if df.empty:
-        st.warning("collection vide — lancer analyse_nba.ipynb d'abord")
+        st.warning("collection vide — lancer jobs/analyses.py d'abord")
     else:
         st.plotly_chart(fig_fn(df), use_container_width=True)
 

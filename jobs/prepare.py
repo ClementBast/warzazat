@@ -1,7 +1,4 @@
-"""Preparation : CSV -> play-by-play enrichi -> parquet HDFS.
 
-    python3 /work/jobs/prepare.py   (dans le conteneur jupyter)
-"""
 from pyspark.sql import SparkSession, functions as F, Window
 
 CSV = "/work/data/archive/csv"
@@ -40,7 +37,6 @@ pbp = (pbp_raw.select("game_id", "eventnum", "eventmsgtype", "period",
     .withColumn("marge_dom", F.split("score_f", " - ").getItem(1).cast("int")
                            - F.split("score_f", " - ").getItem(0).cast("int")))
 
-# dropDuplicates : les matchs All-Star sont listes 2x dans game.csv
 g = (game.select("game_id", "season_id", "game_date", "season_type", "wl_home",
                  "team_abbreviation_home", "team_abbreviation_away")
         .dropDuplicates(["game_id"])
