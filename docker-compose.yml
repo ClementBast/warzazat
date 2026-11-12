@@ -1,0 +1,89 @@
+services:
+  spark-master:
+    image: projet-nba/spark:3.5.7
+    build: ./docker
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    volumes:
+      - ./conf:/opt/spark/conf
+
+  spark-worker:
+    image: projet-nba/spark:3.5.7
+    build: ./docker
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077 --cores 2 --memory 3g
+    depends_on:
+      - spark-master
+    volumes:
+      - ./data:/work/data
+      - ./resultats:/work/resultats
+      - ./conf:/opt/spark/conf
+
+  jupyter:
+    image: projet-nba/spark:3.5.7
+    build: ./docker
+    command: jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --ServerApp.token= --ServerApp.password= --ServerApp.root_dir=/work
+    ports:
+      - "8888:8888"
+      - "4040:4040"
+    depends_on:
+      - spark-master
+      - mongo
+      - namenode
+    volumes:
+      - ./data:/work/data
+      - ./events:/work/events
+      - ./notebooks:/work/notebooks
+      - ./resultats:/work/resultats
+      - ./conf:/opt/spark/conf
+
+  spark-history:
+    image: projet-nba/spark:3.5.7
+    build: ./docker
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer
+    ports:
+      - "18080:18080"
+    depends_on:
+      - spark-master
+    volumes:
+      - ./events:/work/events
+      - ./conf:/opt/spark/conf
+
+  mongo:
+    image: mongo:7.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    env_file:
+      - hadoop.env
+    environment:
+      - CLUSTER_NAME=nba
+      - HDFS_CONF_dfs_namenode_name_dir=file:///hadoop/dfs/name
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    env_file:
+      - hadoop.env
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+    ports:
+      - "9864:9864"
+    depends_on:
+      - namenode
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+
+volumes:
+  mongo-data:
+  hadoop_namenode:
+  hadoop_datanode:

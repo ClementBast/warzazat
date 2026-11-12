@@ -1,0 +1,6 @@
+data/
+events/
+resultats/*.tmp
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
