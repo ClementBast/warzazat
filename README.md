@@ -32,9 +32,14 @@ Pas de Kafka : la donnée est historique (batch), pas un flux temps réel — Ka
 ## Lancer
 
 ```bash
-docker compose up -d          # monte spark master/worker/history, jupyter, mongo, hdfs
-# dataset : placer l'extraction Kaggle dans data/archive/ (non versionne, ~4,5 Go)
-# jupyter : http://localhost:8888 -> notebooks/analyse_nba.ipynb
+docker compose up -d          # monte spark master/worker/history, jupyter, mongo, hdfs, dashboard
+
+# pipeline (dans le conteneur jupyter)
+docker exec projetgroupe-jupyter-1 python3 /work/jobs/ingest_kaggle.py   # Kaggle -> data/archive/ (anonyme)
+docker exec projetgroupe-jupyter-1 python3 /work/jobs/prepare.py         # CSV -> parquet HDFS /nba/pbp
+docker exec projetgroupe-jupyter-1 python3 /work/jobs/analyses.py        # parquet -> Mongo + resultats/*.png
+
+# jupyter : http://localhost:8888 -> notebooks/analyse_nba.ipynb (meme pipeline, interactif)
 # spark UI : http://localhost:8080 | HDFS : http://localhost:9870 | history : http://localhost:18080
 # dashboard : http://localhost:8501 (Streamlit, lit les collections Mongo)
 ```
@@ -48,7 +53,11 @@ docker compose up -d          # monte spark master/worker/history, jupyter, mong
 
 ## Structure
 
-- `notebooks/analyse_nba.ipynb` — pipeline + analyses exécutées (le cœur du projet)
+- `jobs/` — pipeline en scripts (workflow propre) :
+  - `ingest_kaggle.py` — télécharge le dataset Kaggle → `data/archive/` (`--hdfs` : pousse aussi vers `hdfs:///nba/raw`)
+  - `prepare.py` — CSV → play-by-play enrichi → parquet `hdfs:///nba/pbp`
+  - `analyses.py` — agrégats → MongoDB (14 collections) + `resultats/*.png`
+- `notebooks/analyse_nba.ipynb` — même pipeline en interactif (doc + démo)
 - `notebooks/gen_nb.py` — générateur du notebook
 - `dashboard/app.py` — dashboard Streamlit (couche serving Mongo → Plotly)
 - `docker-compose.yml`, `hadoop.env`, `docker/`, `conf/` — environnement
