@@ -67,3 +67,10 @@
 | 2020 | 1113 | 515683 |
 | 2021 | 1257 | 583093 |
 | 2022 | 1249 | 583983 |
+
+## État des données — Silver → Gold
+
+| couche | emplacement | contenu |
+|---|---|---|
+| silver | data/silver/play_by_play + games (parquet) | événements typés + horloge parsée, uniques par (game_id, eventnum) |
+| gold | data/gold/ (parquet) + mongo nba | `actions_minute` (48 docs), `par_quart_temps` (4 docs), `tirs_par_saison` (70 docs), `tirs_par_quart` (4 docs), `assist_decennie` (4 docs), `assist_equipe` (30 docs), `fautes_fin` (3 docs), `ralentissement` (2 docs), `timeouts_distrib` (13 docs), `timeouts_efficacite` (2 docs), `runs_resume` (1 docs), `runs_par_periode` (7 docs), `top_runs` (10 docs), `remontees` (6 docs) |

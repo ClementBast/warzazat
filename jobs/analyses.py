@@ -9,9 +9,10 @@ from pyspark.sql import SparkSession, functions as F, Window
 RES = "/work/resultats"
 spark = SparkSession.builder.appName("nba-analyses").getOrCreate()
 
-pbp = spark.read.parquet("/work/data/silver/play_by_play")
-g = spark.read.parquet("/work/data/silver/games").select("game_id", "season_type", "wl_home")
-game = spark.read.parquet("/work/data/silver/games")
+SILVER = "hdfs://namenode:9000/nba/silver"
+pbp = spark.read.parquet(f"{SILVER}/play_by_play")
+g = spark.read.parquet(f"{SILVER}/games").select("game_id", "season_type", "wl_home")
+game = spark.read.parquet(f"{SILVER}/games")
 
 w = Window.partitionBy("game_id").orderBy("eventnum").rowsBetween(Window.unboundedPreceding, 0)
 rs = (pbp.join(g, "game_id")
@@ -232,7 +233,7 @@ plt.title("Victoire selon le plus gros deficit subi dans le match"); plt.ylabel(
 for i, r in taux.iterrows(): plt.text(i, r.win_pct * 100 + 1, f"n={r.n}", ha="center", fontsize=8)
 plt.savefig(f"{RES}/05_remontees.png"); plt.close()
 
-rs.write.mode("overwrite").partitionBy("annee").parquet("/work/data/gold/pbp_enrichi")
+rs.write.mode("overwrite").partitionBy("annee").parquet("hdfs://namenode:9000/nba/gold/pbp_enrichi")
 
 mongo = pymongo.MongoClient("mongodb://mongo:27017")["nba"]
 for nom, df in RESULTATS.items():
@@ -240,15 +241,15 @@ for nom, df in RESULTATS.items():
     col.drop()
     col.insert_many(json.loads(df.to_json(orient="records")))
     clean = df.rename(columns={c: c.replace(" ", "_") for c in df.columns})
-    spark.createDataFrame(clean).write.mode("overwrite").parquet(f"/work/data/gold/{nom}")
+    spark.createDataFrame(clean).write.mode("overwrite").parquet(f"hdfs://namenode:9000/nba/gold/{nom}")
     print(f"{nom}: {col.count_documents({})} docs")
 
 with open("/work/resultats/controles_silver.md", "a", encoding="utf-8") as f:
     f.write("\n\n## État des données — Silver → Gold\n\n")
     f.write("| couche | emplacement | contenu |\n|---|---|---|\n")
-    f.write("| silver | data/silver/play_by_play + games (parquet) | "
+    f.write("| silver | hdfs /nba/silver/play_by_play + games (parquet) | "
             "événements typés + horloge parsée, uniques par (game_id, eventnum) |\n")
-    f.write("| gold | data/gold/ (parquet) + mongo nba | " + ", ".join(
+    f.write("| gold | hdfs /nba/gold/ (parquet) + mongo nba | " + ", ".join(
             f"`{n}` ({mongo[n].count_documents({})} docs)" for n in RESULTATS) + " |\n")
 
 spark.stop()

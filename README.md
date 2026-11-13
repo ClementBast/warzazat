@@ -13,25 +13,28 @@ Analyse du dataset Kaggle [`wyattowalsh/basketball`](https://www.kaggle.com/data
 ## Architecture
 
 ```
-BRONZE  data/archive/csv/          (brut, jamais modifié)
+BRONZE  hdfs /nba/raw/             (CSV bruts poussés par ingest --hdfs, jamais modifiés)
    |    silver.py (Spark) : schémas, normalisation, dédoublonnage,
    |    quarantaine des conflits, contrôles qualité
    v
-SILVER  data/silver/games          (1 ligne / game_id, + line_score/info/summary/other_stats)
-        data/silver/play_by_play   (1 ligne / (game_id,eventnum), horloge parsée, partitionné par saison)
-        data/silver/_quarantine/   (conflits et anomalies écartés, pas supprimés)
+SILVER  hdfs /nba/silver/games          (1 ligne / game_id, + line_score/info/summary/other_stats)
+        hdfs /nba/silver/play_by_play   (1 ligne / (game_id,eventnum), horloge parsée, partitionné par saison)
+        hdfs /nba/silver/_quarantine/   (conflits et anomalies écartés, pas supprimés)
    |    analyses.py (Spark) : enrichissement métier + agrégats
    v
-GOLD    data/gold/ (parquet : pbp enrichi + tables agrégées)
+GOLD    hdfs /nba/gold/ (parquet : pbp enrichi + tables agrégées)
         MongoDB nba (14 collections)  ->  dashboard Streamlit :8501
         resultats/*.png               ->  figures du rapport
 ```
+
+Data lake = HDFS (`hdfs://namenode:9000/nba/`) : bronze→silver→gold y résident.
+Le disque local ne garde que les livrables (`resultats/`) et le code (`jobs/`).
 
 | Étape | Techno |
 |---|---|
 | Ingestion | kagglehub (dataset public, anonyme) |
 | Traitement | PySpark — DataFrames, fenêtres, jointures, contrôles qualité |
-| Persistance silver | Parquet local (`data/silver/`), partitionné par saison |
+| Persistance lake | HDFS (namenode:9000) — parquet partitionné par saison |
 | Persistance serving | MongoDB |
 | Viz | Streamlit + Plotly ; matplotlib pour les figures du rapport |
 
@@ -45,8 +48,8 @@ docker compose up -d          # monte spark master/worker/history, jupyter, mong
 # pipeline (dans le conteneur jupyter)
 docker exec projetgroupe-jupyter-1 python3 /work/jobs/ingest_kaggle.py    # Kaggle -> data/archive/ (anonyme)
 docker exec projetgroupe-jupyter-1 python3 /work/jobs/profile_bronze.py   # rapport -> resultats/profilage_bronze.md
-docker exec projetgroupe-jupyter-1 python3 /work/jobs/silver.py           # bronze -> data/silver/ (ajouter --sample N pour un test rapide)
-docker exec projetgroupe-jupyter-1 python3 /work/jobs/analyses.py         # silver -> Mongo + resultats/*.png (couche gold)
+docker exec projetgroupe-jupyter-1 python3 /work/jobs/silver.py           # bronze -> hdfs /nba/silver (ajouter --sample N pour un test rapide)
+docker exec projetgroupe-jupyter-1 python3 /work/jobs/analyses.py         # silver -> hdfs /nba/gold + Mongo + resultats/*.png
 docker exec projetgroupe-jupyter-1 python3 /work/jobs/test_silver.py      # tests unitaires des règles silver
 
 # spark UI : http://localhost:8080 | HDFS : http://localhost:9870 | history : http://localhost:18080
@@ -66,9 +69,9 @@ docker exec projetgroupe-jupyter-1 python3 /work/jobs/test_silver.py      # test
   - `ingest_kaggle.py` — télécharge le dataset Kaggle → `data/archive/` (`--hdfs` : pousse aussi vers `hdfs:///nba/raw`)
   - `schemas.py` — schémas Spark explicites (ids en string)
   - `profile_bronze.py` — profilage source → `resultats/profilage_bronze.md`
-  - `silver.py` — bronze → `data/silver/` : normalisation, dédup exact, quarantaine des conflits, contrôles (`--sample N` pour itérer vite)
+  - `silver.py` — bronze → `hdfs:///nba/silver` : normalisation, dédup exact, quarantaine des conflits, contrôles (`--sample N` pour itérer vite)
   - `test_silver.py` — tests des règles de normalisation/dédoublonnage
-  - `analyses.py` — silver → enrichissement + agrégats → MongoDB + `resultats/*.png`
+  - `analyses.py` — silver HDFS → enrichissement + agrégats → `hdfs:///nba/gold` + MongoDB + `resultats/*.png`
 - `dashboard/app.py` — dashboard Streamlit (couche serving Mongo → Plotly)
 - `docker-compose.yml`, `hadoop.env`, `docker/`, `conf/` — environnement
 - `resultats/` — les 10 figures pour le rapport

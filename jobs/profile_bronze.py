@@ -6,7 +6,7 @@ from pyspark.sql import SparkSession, functions as F
 sys.path.insert(0, os.path.dirname(__file__))
 from schemas import SCHEMAS
 
-CSV = "/work/data/archive/csv"
+CSV = "hdfs://namenode:9000/nba/raw"
 OUT = "/work/resultats/profilage_bronze.md"
 
 TABLES = ["game", "line_score", "game_info", "game_summary", "other_stats", "play_by_play"]
@@ -27,7 +27,7 @@ def main():
            for t in TABLES}
     L = []
 
-    L.append("# Profilage Bronze — data/archive/csv\n")
+    L.append("# Profilage Bronze — hdfs /nba/raw\n")
     rows = []
     for t in TABLES:
         df = dfs[t]
