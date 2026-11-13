@@ -12,7 +12,7 @@ services:
   spark-worker:
     image: projet-nba/spark:3.5.7
     build: ./docker
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077 --cores 2 --memory 3g
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077 --cores 4 --memory 6g
     depends_on:
       - spark-master
     volumes:

@@ -9,8 +9,29 @@ from pyspark.sql import SparkSession, functions as F, Window
 RES = "/work/resultats"
 spark = SparkSession.builder.appName("nba-analyses").getOrCreate()
 
-rs = spark.read.parquet("hdfs://namenode:9000/nba/pbp").filter(F.col("season_type") == "Regular Season")
-game = spark.read.option("header", "true").csv("/work/data/archive/csv/game.csv")
+pbp = spark.read.parquet("/work/data/silver/play_by_play")
+g = spark.read.parquet("/work/data/silver/games").select("game_id", "season_type", "wl_home")
+game = spark.read.parquet("/work/data/silver/games")
+
+w = Window.partitionBy("game_id").orderBy("eventnum").rowsBetween(Window.unboundedPreceding, 0)
+rs = (pbp.join(g, "game_id")
+    .filter(F.col("season_type") == "Regular Season")
+    .withColumn("hd", F.col("homedescription"))
+    .withColumn("vd", F.col("visitordescription"))
+    .withColumn("passeur", F.col("player2_name"))
+    .withColumn("side", F.when(F.col("hd").isNotNull(), "H")
+                       .when(F.col("vd").isNotNull(), "A").otherwise("N"))
+    .withColumn("descr", F.coalesce("hd", "vd"))
+    .withColumn("pts", F.when(F.col("eventmsgtype") == 1,
+                              F.when(F.col("descr").contains("3PT"), 3).otherwise(2))
+                       .when((F.col("eventmsgtype") == 3) & (~F.col("descr").contains("MISS")), 1)
+                       .otherwise(0))
+    .withColumn("tir", F.when(F.col("descr").contains("3PT"), "3 points")
+                       .when(F.col("descr").rlike("Dunk|Layup|Tip|Alley Oop|Finger Roll"), "proche cercle")
+                       .when(F.col("eventmsgtype").isin(1, 2), "mi-distance"))
+    .withColumn("score_f", F.last(F.when(F.length("score") > 0, F.col("score")), True).over(w))
+    .withColumn("marge_dom", F.split("score_f", " - ").getItem(1).cast("int")
+                           - F.split("score_f", " - ").getItem(0).cast("int")))
 RESULTATS = {}
 n_matchs = rs.select("game_id").distinct().count()
 print("matchs RS:", n_matchs)
@@ -44,7 +65,6 @@ par_qt.plot(x="period", kind="bar", figsize=(10, 4), title="Rythme par quart-tem
 plt.savefig(f"{RES}/02_quart_temps.png"); plt.close()
 
 saisons = (game.filter(F.col("season_type") == "Regular Season")
-    .withColumn("annee", F.col("season_id").cast("int") - 20000)
     .withColumn("t3", F.col("fg3a_home").cast("double") + F.col("fg3a_away").cast("double"))
     .withColumn("tt", F.col("fga_home").cast("double") + F.col("fga_away").cast("double"))
     .groupBy("annee")
@@ -212,12 +232,24 @@ plt.title("Victoire selon le plus gros deficit subi dans le match"); plt.ylabel(
 for i, r in taux.iterrows(): plt.text(i, r.win_pct * 100 + 1, f"n={r.n}", ha="center", fontsize=8)
 plt.savefig(f"{RES}/05_remontees.png"); plt.close()
 
+rs.write.mode("overwrite").partitionBy("annee").parquet("/work/data/gold/pbp_enrichi")
+
 mongo = pymongo.MongoClient("mongodb://mongo:27017")["nba"]
 for nom, df in RESULTATS.items():
     col = mongo[nom]
     col.drop()
     col.insert_many(json.loads(df.to_json(orient="records")))
+    clean = df.rename(columns={c: c.replace(" ", "_") for c in df.columns})
+    spark.createDataFrame(clean).write.mode("overwrite").parquet(f"/work/data/gold/{nom}")
     print(f"{nom}: {col.count_documents({})} docs")
+
+with open("/work/resultats/controles_silver.md", "a", encoding="utf-8") as f:
+    f.write("\n\n## État des données — Silver → Gold\n\n")
+    f.write("| couche | emplacement | contenu |\n|---|---|---|\n")
+    f.write("| silver | data/silver/play_by_play + games (parquet) | "
+            "événements typés + horloge parsée, uniques par (game_id, eventnum) |\n")
+    f.write("| gold | data/gold/ (parquet) + mongo nba | " + ", ".join(
+            f"`{n}` ({mongo[n].count_documents({})} docs)" for n in RESULTATS) + " |\n")
 
 spark.stop()
 print("analyses terminees")

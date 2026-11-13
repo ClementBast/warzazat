@@ -13,17 +13,25 @@ Analyse du dataset Kaggle [`wyattowalsh/basketball`](https://www.kaggle.com/data
 ## Architecture
 
 ```
-data/archive/csv/  ->  Spark (master + worker)  ->  HDFS  /nba/pbp (parquet)
-                                              ->  MongoDB nba (14 collections d'agregats)
-                                                  ->  dashboard Streamlit :8501
-                                              ->  resultats/*.png (figures)
+BRONZE  data/archive/csv/          (brut, jamais modifié)
+   |    silver.py (Spark) : schémas, normalisation, dédoublonnage,
+   |    quarantaine des conflits, contrôles qualité
+   v
+SILVER  data/silver/games          (1 ligne / game_id, + line_score/info/summary/other_stats)
+        data/silver/play_by_play   (1 ligne / (game_id,eventnum), horloge parsée, partitionné par saison)
+        data/silver/_quarantine/   (conflits et anomalies écartés, pas supprimés)
+   |    analyses.py (Spark) : enrichissement métier + agrégats
+   v
+GOLD    data/gold/ (parquet : pbp enrichi + tables agrégées)
+        MongoDB nba (14 collections)  ->  dashboard Streamlit :8501
+        resultats/*.png               ->  figures du rapport
 ```
 
 | Étape | Techno |
 |---|---|
-| Ingestion | Spark batch (dataset statique) |
-| Traitement | PySpark — DataFrames, fenêtres, jointures |
-| Persistance traitée | HDFS (parquet) |
+| Ingestion | kagglehub (dataset public, anonyme) |
+| Traitement | PySpark — DataFrames, fenêtres, jointures, contrôles qualité |
+| Persistance silver | Parquet local (`data/silver/`), partitionné par saison |
 | Persistance serving | MongoDB |
 | Viz | Streamlit + Plotly ; matplotlib pour les figures du rapport |
 
@@ -35,9 +43,11 @@ Pas de Kafka : la donnée est historique (batch), pas un flux temps réel — Ka
 docker compose up -d          # monte spark master/worker/history, jupyter, mongo, hdfs, dashboard
 
 # pipeline (dans le conteneur jupyter)
-docker exec projetgroupe-jupyter-1 python3 /work/jobs/ingest_kaggle.py   # Kaggle -> data/archive/ (anonyme)
-docker exec projetgroupe-jupyter-1 python3 /work/jobs/prepare.py         # CSV -> parquet HDFS /nba/pbp
-docker exec projetgroupe-jupyter-1 python3 /work/jobs/analyses.py        # parquet -> Mongo + resultats/*.png
+docker exec projetgroupe-jupyter-1 python3 /work/jobs/ingest_kaggle.py    # Kaggle -> data/archive/ (anonyme)
+docker exec projetgroupe-jupyter-1 python3 /work/jobs/profile_bronze.py   # rapport -> resultats/profilage_bronze.md
+docker exec projetgroupe-jupyter-1 python3 /work/jobs/silver.py           # bronze -> data/silver/ (ajouter --sample N pour un test rapide)
+docker exec projetgroupe-jupyter-1 python3 /work/jobs/analyses.py         # silver -> Mongo + resultats/*.png (couche gold)
+docker exec projetgroupe-jupyter-1 python3 /work/jobs/test_silver.py      # tests unitaires des règles silver
 
 # spark UI : http://localhost:8080 | HDFS : http://localhost:9870 | history : http://localhost:18080
 # dashboard : http://localhost:8501 (Streamlit, lit les collections Mongo)
@@ -54,8 +64,11 @@ docker exec projetgroupe-jupyter-1 python3 /work/jobs/analyses.py        # parqu
 
 - `jobs/` — pipeline en scripts (workflow propre) :
   - `ingest_kaggle.py` — télécharge le dataset Kaggle → `data/archive/` (`--hdfs` : pousse aussi vers `hdfs:///nba/raw`)
-  - `prepare.py` — CSV → play-by-play enrichi → parquet `hdfs:///nba/pbp`
-  - `analyses.py` — agrégats → MongoDB (14 collections) + `resultats/*.png`
+  - `schemas.py` — schémas Spark explicites (ids en string)
+  - `profile_bronze.py` — profilage source → `resultats/profilage_bronze.md`
+  - `silver.py` — bronze → `data/silver/` : normalisation, dédup exact, quarantaine des conflits, contrôles (`--sample N` pour itérer vite)
+  - `test_silver.py` — tests des règles de normalisation/dédoublonnage
+  - `analyses.py` — silver → enrichissement + agrégats → MongoDB + `resultats/*.png`
 - `dashboard/app.py` — dashboard Streamlit (couche serving Mongo → Plotly)
 - `docker-compose.yml`, `hadoop.env`, `docker/`, `conf/` — environnement
 - `resultats/` — les 10 figures pour le rapport
